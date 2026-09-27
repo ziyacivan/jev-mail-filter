@@ -1,5 +1,7 @@
 # jev-mail-filter
 
+![Gmail filters you write in plain English](assets/social.png)
+
 **Gmail filters you write in plain English.**
 [Jev](https://docs.typesafe.ai) reads every new email and labels, stars, archives it, turns it into a to-do, or flags it as phishing.
 Every morning it sends you a digest, and it reminds you about emails you sent that are still waiting on a reply.
