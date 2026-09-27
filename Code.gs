@@ -20,6 +20,10 @@ const PRIORITY_LEVELS = [
 const MIN_DATE_CONFIDENCE = 0.6; // weakest part confidence needed to create a task
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; // Date.getDay() order
+// Phishing: suspicious = (sender domain isn't the claimed brand's, or Reply-To goes to another domain)
+//            AND (asks for credentials/payment, or threatens).
+// Suspicious mail gets this label and is never starred or turned into a task.
+const SUSPICIOUS_LABEL = 'Jev/Suspicious';
 const DONE_LABEL = 'Jev/done'; // marks threads already processed
 const BODY_CHARS = 2000;      // Jev prefers small, relevant state
 
@@ -28,16 +32,22 @@ function run() {
   const threads = GmailApp.search(`in:inbox -label:${DONE_LABEL.replace('/', '-')} newer_than:2d`, 0, 30);
   for (const thread of threads) {
     const msg = thread.getMessages().pop();
-    const answers = ask({
+    const email = {
       from: msg.getFrom(),
+      reply_to: msg.getReplyTo() || undefined,
       subject: msg.getSubject(),
       body: msg.getPlainBody().slice(0, BODY_CHARS),
-    });
+    };
+    const answers = ask(email);
     RULES.forEach((r, i) => {
       if (answers[`r${i}`].noul < THRESHOLD) return;
       thread.addLabel(getLabel(r.label));
       if (r.archive) thread.moveToArchive();
     });
+    if (isSuspicious(answers, email)) {
+      thread.addLabel(getLabel(SUSPICIOUS_LABEL)).addLabel(done);
+      continue;
+    }
     if (answers.priority.score >= STAR_AT) msg.star();
     const due = resolveDeadline(answers, msg.getDate());
     if (due) Tasks.Tasks.insert({
@@ -49,9 +59,9 @@ function run() {
   }
 }
 
-// One request per email: one Noul per rule, a priority Score and the deadline parts, all answered in parallel.
+// One request per email: one Noul per rule, a priority Score, the deadline parts and phishing signals, all answered in parallel.
 function ask(email) {
-  const questions = deadlineQuestions();
+  const questions = { ...deadlineQuestions(), ...phishingQuestions(email) };
   RULES.forEach((r, i) => {
     questions[`r${i}`] = { type: 'noul', instructions: `Considering \`email\`: ${r.rule}` };
   });
@@ -75,6 +85,33 @@ function ask(email) {
     if ((code !== 429 && code !== 529) || attempt >= 3) throw new Error(`TypeSafe ${code}: ${res.getContentText()}`);
     Utilities.sleep(1000 * 2 ** attempt);
   }
+}
+
+function phishingQuestions(email) {
+  return {
+    phish_sender_ok: {
+      type: 'noul',
+      instructions: {
+        sender_domain: domainOf(email.from),
+        question: 'Is `sender_domain` an official domain of the company, bank, or online service that `email` presents itself as coming from?',
+      },
+      criteria: {
+        true: 'The domain belongs to that organization, or the email does not present itself as coming from any organization.',
+        false: 'The email presents itself as coming from an organization, but the domain is not one of its own, such as a lookalike or unrelated domain.',
+      },
+    },
+    phish_credentials: { type: 'noul', instructions: 'Does `email` ask me to log in, enter a password or verification code, or give payment or card details?' },
+    phish_pressure: { type: 'noul', instructions: 'Does `email` threaten a bad outcome, such as a suspended account, lost money, or legal action, unless I act right away?' },
+  };
+}
+
+function isSuspicious(a, email) {
+  const replyElsewhere = !!email.reply_to && domainOf(email.reply_to) !== domainOf(email.from);
+  return (a.phish_sender_ok.noul < 1 - THRESHOLD || replyElsewhere) && (a.phish_credentials.noul >= THRESHOLD || a.phish_pressure.noul >= THRESHOLD);
+}
+
+function domainOf(address) {
+  return (address || '').split('@').pop().replace(/>.*$/, '').trim().toLowerCase();
 }
 
 function deadlineQuestions() {

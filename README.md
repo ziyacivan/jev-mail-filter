@@ -1,9 +1,9 @@
 # jev-mail-filter
 
 **Gmail filters you write in plain English.**
-[Jev](https://docs.typesafe.ai) reads every new email and labels, stars, archives it, or turns it into a to-do for you.
+[Jev](https://docs.typesafe.ai) reads every new email and labels, stars, archives it, turns it into a to-do, or flags it as phishing.
 
-> ~150 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
+> Under 200 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
 
 ## Gmail's filters can't do this
 
@@ -28,6 +28,7 @@ const RULES = [
 | *"Can you send me your comments on the contract **by Friday**?"* | labeled **Needs reply**, starred, **task due Friday** |
 | *"New sign-in on Windows"* | labeled **Security**, starred |
 | *"URGENT prod is down, customers can't pay"* | labeled **Needs reply**, starred |
+| *"Your account has been limited"* from `paypa1-account-verify.com` | labeled **Suspicious**, not starred, no task |
 
 These are real Jev answers on sample emails. Try it on your own inbox and tune from there.
 
@@ -36,6 +37,7 @@ These are real Jev answers on sample emails. Try it on your own inbox and tune f
 - **Plain-English labels.** Each rule is one yes/no question. An email can match several rules.
 - **Priority stars.** Every email gets a 0–3 importance score. Anything that needs you gets a star.
 - **Deadlines become Google Tasks.** It understands *"by Friday"*, *"tomorrow"*, *"next Monday"* and *"before October 3"*, and sets the right due date.
+- **Phishing flag.** Mail that pretends to be a brand from someone else's domain and asks for a password, card, or quick action gets labeled `Jev/Suspicious`.
 - **Auto-archive.** Add `archive: true` to a rule and matching emails leave your inbox.
 - **Plays it safe.** If Jev isn't sure, nothing happens. It never sends or deletes anything.
 
@@ -43,7 +45,7 @@ These are real Jev answers on sample emails. Try it on your own inbox and tune f
 
 ```mermaid
 flowchart LR
-  A[New email] --> B["Jev: one request<br/>• yes/no per rule<br/>• priority 0–3<br/>• deadline parts"]
+  A[New email] --> B["Jev: one request<br/>• yes/no per rule<br/>• priority 0–3<br/>• deadline parts<br/>• phishing signals"]
   B --> C{Your code}
   C --> D[Labels / archive]
   C --> E[Star]
@@ -79,6 +81,12 @@ The calendar math is done in code, counting from when the email was sent. That m
 
 **Writing good rules:** Jev reads your rules literally, so state the exact condition rather than a vibe.
 If an email gets mislabeled, whatever you'd say to explain what you *meant* is the part missing from the rule.
+
+**Phishing** is flagged when both hold:
+1. the sender's domain isn't one the claimed company, bank, or service owns (Jev), *or* Reply-To goes to a different domain (code), and
+2. the email asks for a login, password, code, or card details, *or* threatens a bad outcome unless you act now (Jev).
+
+Flagged mail is never starred or turned into a task. It's a strong hint, not a guarantee, so keep your judgment on.
 
 **Reprocessing:** handled threads get the `Jev/done` label. Remove that label to run a thread through again.
 
