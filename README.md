@@ -9,6 +9,7 @@ No server, no OAuth app: it's one Google Apps Script file.
 
 Every 10 minutes, each new inbox thread goes to Jev in **one request** with one yes/no question (Noul) per rule.
 Rules scoring above `THRESHOLD` get their label, and `archive: true` rules also archive the thread.
+The same request also asks for a 0–3 priority Score (`PRIORITY_LEVELS`). Threads at `STAR_AT` or above get starred.
 
 ## Setup (2 min)
 

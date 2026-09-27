@@ -9,6 +9,13 @@ const RULES = [
   { label: 'Jev/Security',   rule: 'This email is a login alert, password reset, verification code, or account security notice.' },
 ];
 const THRESHOLD = 0.7;        // Noul probability needed to apply a label; tune on your own mail
+const STAR_AT = 2;            // star threads whose priority score (0-3) reaches this
+const PRIORITY_LEVELS = [
+  'Automated or bulk mail with nothing for me to do: promotions, newsletters, routine notifications.',
+  'Worth a glance but no action needed: receipts, status updates, FYIs.',
+  'Needs my reply or action soon: a question, request, deadline, or problem that affects me.',
+  'Urgent: needs me today, such as a same-day deadline, money or account access at risk, or someone blocked waiting on me.',
+];
 const DONE_LABEL = 'Jev/done'; // marks threads already processed
 const BODY_CHARS = 2000;      // Jev prefers small, relevant state
 
@@ -27,16 +34,22 @@ function run() {
       thread.addLabel(getLabel(r.label));
       if (r.archive) thread.moveToArchive();
     });
+    if (answers.priority.score >= STAR_AT) msg.star();
     thread.addLabel(done);
   }
 }
 
-// One request per email, one Noul per rule, all answered in parallel.
+// One request per email: one Noul per rule plus a priority Score, all answered in parallel.
 function ask(email) {
   const questions = {};
   RULES.forEach((r, i) => {
     questions[`r${i}`] = { type: 'noul', instructions: `Considering \`email\`: ${r.rule}` };
   });
+  questions.priority = {
+    type: 'score',
+    instructions: 'How important and time-sensitive is `email` for me, the recipient?',
+    criteria: PRIORITY_LEVELS,
+  };
   const key = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   for (let attempt = 0; ; attempt++) {
     const res = UrlFetchApp.fetch('https://api.typesafe.ai/v1/systemone', {
