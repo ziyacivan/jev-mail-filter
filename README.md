@@ -2,8 +2,9 @@
 
 **Gmail filters you write in plain English.**
 [Jev](https://docs.typesafe.ai) reads every new email and labels, stars, archives it, turns it into a to-do, or flags it as phishing.
+Every morning it sends you a digest, and it reminds you about emails you sent that are still waiting on a reply.
 
-> ~200 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
+> ~300 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
 
 ## Gmail's filters can't do this
 
@@ -38,6 +39,8 @@ These are real Jev answers on sample emails. Try it on your own inbox and tune f
 - **Priority stars.** Every email gets a 0–3 importance score. Anything that needs you gets a star.
 - **Deadlines become Google Tasks.** It understands *"by Friday"*, *"tomorrow"*, *"next Monday"* and *"before October 3"*, and sets the right due date.
 - **Phishing flag.** Mail that pretends to be a brand from someone else's domain and asks for a password, card, or quick action gets labeled `Jev/Suspicious`.
+- **Morning digest.** At 8:00 you get one email listing yesterday's mail, most important first, each with the one sentence worth reading. Jev *picks* that sentence from the email and never writes one, so nothing is made up.
+- **Waiting on them.** When you send a question or a request and get no reply in 3 days, the thread comes back to your inbox labeled `Jev/Waiting on them` and shows up in your digest.
 - **Auto-archive.** Add `archive: true` to a rule and matching emails leave your inbox.
 - **Plays it safe.** If Jev isn't sure, nothing happens. It never sends or deletes anything.
 
@@ -45,11 +48,12 @@ These are real Jev answers on sample emails. Try it on your own inbox and tune f
 
 ```mermaid
 flowchart LR
-  A[New email] --> B["Jev: one request<br/>• yes/no per rule<br/>• priority 0–3<br/>• deadline parts<br/>• phishing signals"]
+  A[New email] --> B["Jev: one request<br/>• yes/no per rule<br/>• priority 0–3<br/>• deadline parts<br/>• phishing signals<br/>• digest sentence"]
   B --> C{Your code}
   C --> D[Labels / archive]
   C --> E[Star]
   C --> F[Google Task]
+  C --> G[Morning digest]
 ```
 
 Every 10 minutes, each new inbox thread goes to Jev in **a single request**, and all the questions are answered in parallel.
@@ -66,7 +70,7 @@ The calendar math is done in code, counting from when the email was sent. That m
 4. **Services** (the ＋ in the left sidebar) → add **Google Tasks API**.
 5. Edit `RULES` to match your own filters.
 6. Run `run` once and grant the permissions, then check the labels it applied.
-7. Run `install` once to run it every 10 minutes from now on.
+7. Run `install` once. From then on it runs every 10 minutes and sends your digest every morning.
 
 > **Stuck on "Loading data…"?** Open an incognito window and sign in with only the Google account you want to filter. Apps Script can hang when several accounts are signed in.
 
@@ -78,6 +82,8 @@ The calendar math is done in code, counting from when the email was sent. That m
 | `STAR_AT` | `2` | Priority score (0–3) that earns a star |
 | `PRIORITY_LEVELS` | 4 levels | What each priority score means, in plain English |
 | `MIN_DATE_CONFIDENCE` | `0.6` | How sure Jev must be about every part of a date before a task is created |
+| `DIGEST_HOUR` | `8` | Hour of the day the digest is sent |
+| `WAIT_DAYS` | `3` | Days without a reply before a sent email comes back to your inbox |
 
 **Writing good rules:** Jev reads your rules literally, so state the exact condition rather than a vibe.
 If an email gets mislabeled, whatever you'd say to explain what you *meant* is the part missing from the rule.
@@ -88,7 +94,7 @@ If an email gets mislabeled, whatever you'd say to explain what you *meant* is t
 
 Flagged mail is never starred or turned into a task. It's a strong hint, not a guarantee, so keep your judgment on.
 
-**New replies count.** Each run looks at every thread whose newest message arrived since the last run, so a reply that adds a deadline or turns urgent is picked up. Your own replies are skipped.
+**New replies count.** Each run looks at every thread whose newest message arrived since the last run, so a reply that adds a deadline or turns urgent is picked up. When the newest message is yours, it only checks whether you asked them for something.
 
 **Reprocessing:** the script remembers where it left off in the `CURSOR` script property. Delete it to go back over the last 2 days.
 
