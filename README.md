@@ -3,7 +3,7 @@
 **Gmail filters you write in plain English.**
 [Jev](https://docs.typesafe.ai) reads every new email and labels, stars, archives it, turns it into a to-do, or flags it as phishing.
 
-> Under 200 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
+> ~200 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
 
 ## Gmail's filters can't do this
 
@@ -88,6 +88,8 @@ If an email gets mislabeled, whatever you'd say to explain what you *meant* is t
 
 Flagged mail is never starred or turned into a task. It's a strong hint, not a guarantee, so keep your judgment on.
 
-**Reprocessing:** handled threads get the `Jev/done` label. Remove that label to run a thread through again.
+**New replies count.** Each run looks at every thread whose newest message arrived since the last run, so a reply that adds a deadline or turns urgent is picked up. Your own replies are skipped.
+
+**Reprocessing:** the script remembers where it left off in the `CURSOR` script property. Delete it to go back over the last 2 days.
 
 Built with [Jev](https://docs.typesafe.ai) by TypeSafe: small, fast models that return typed answers and probabilities instead of text.

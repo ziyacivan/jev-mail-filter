@@ -24,39 +24,57 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 //            AND (asks for credentials/payment, or threatens).
 // Suspicious mail gets this label and is never starred or turned into a task.
 const SUSPICIOUS_LABEL = 'Jev/Suspicious';
-const DONE_LABEL = 'Jev/done'; // marks threads already processed
 const BODY_CHARS = 2000;      // Jev prefers small, relevant state
 
+// Each run handles every thread whose newest message arrived after the saved cursor, oldest first,
+// so new replies in old threads are judged too. The cursor advances after each thread; a failure retries from there.
 function run() {
-  const done = getLabel(DONE_LABEL);
-  const threads = GmailApp.search(`in:inbox -label:${DONE_LABEL.replace('/', '-')} newer_than:2d`, 0, 30);
-  for (const thread of threads) {
-    const msg = thread.getMessages().pop();
-    const email = {
-      from: msg.getFrom(),
-      reply_to: msg.getReplyTo() || undefined,
-      subject: msg.getSubject(),
-      body: msg.getPlainBody().slice(0, BODY_CHARS),
-    };
-    const answers = ask(email);
-    RULES.forEach((r, i) => {
-      if (answers[`r${i}`].noul < THRESHOLD) return;
-      thread.addLabel(getLabel(r.label));
-      if (r.archive) thread.moveToArchive();
-    });
-    if (isSuspicious(answers, email)) {
-      thread.addLabel(getLabel(SUSPICIOUS_LABEL)).addLabel(done);
-      continue;
-    }
-    if (answers.priority.score >= STAR_AT) msg.star();
-    const due = resolveDeadline(answers, msg.getDate());
-    if (due) Tasks.Tasks.insert({
-      title: msg.getSubject(),
-      notes: `${msg.getFrom()}\nhttps://mail.google.com/mail/#all/${thread.getId()}`,
-      due: Utilities.formatDate(due, Session.getScriptTimeZone(), 'yyyy-MM-dd') + 'T00:00:00.000Z',
-    }, '@default');
-    thread.addLabel(done);
+  const props = PropertiesService.getScriptProperties();
+  const me = Session.getEffectiveUser().getEmail().toLowerCase();
+  let cursor = Number(props.getProperty('CURSOR')) || Date.now() - 2 * 86400e3; // first run: last 2 days
+  // ponytail: 100 newest threads per run; a bigger backlog skips its oldest threads
+  const threads = GmailApp.search(`in:inbox after:${Math.floor(cursor / 1000)}`, 0, 100)
+    .map(thread => ({ thread, msg: thread.getMessages().filter(m => !m.isDraft()).pop() }))
+    .filter(({ msg }) => msg && msg.getDate().getTime() > cursor)
+    .sort((a, b) => a.msg.getDate() - b.msg.getDate());
+  for (const { thread, msg } of threads) {
+    if (!me || !msg.getFrom().toLowerCase().includes(me)) handle(thread, msg); // skip my own replies
+    cursor = msg.getDate().getTime();
+    props.setProperty('CURSOR', String(cursor));
   }
+}
+
+function handle(thread, msg) {
+  const email = {
+    from: msg.getFrom(),
+    reply_to: msg.getReplyTo() || undefined,
+    subject: msg.getSubject(),
+    body: msg.getPlainBody().slice(0, BODY_CHARS),
+  };
+  const answers = ask(email);
+  RULES.forEach((r, i) => {
+    if (answers[`r${i}`].noul < THRESHOLD) return;
+    thread.addLabel(getLabel(r.label));
+    if (r.archive) thread.moveToArchive();
+  });
+  if (isSuspicious(answers, email)) return thread.addLabel(getLabel(SUSPICIOUS_LABEL));
+  if (answers.priority.score >= STAR_AT) msg.star();
+  const due = resolveDeadline(answers, msg.getDate());
+  if (due) addTask(thread, msg, due);
+}
+
+// Replies quote earlier mail, so the same deadline can be read twice: one task per thread and due date.
+function addTask(thread, msg, due) {
+  const day = Utilities.formatDate(due, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const link = `https://mail.google.com/mail/#all/${thread.getId()}`;
+  const next = new Date(due.getTime() + 86400e3);
+  const existing = Tasks.Tasks.list('@default', {
+    dueMin: `${day}T00:00:00.000Z`,
+    dueMax: Utilities.formatDate(next, Session.getScriptTimeZone(), 'yyyy-MM-dd') + 'T00:00:00.000Z',
+    showHidden: true,
+  }).items || [];
+  if (existing.some(t => (t.notes || '').includes(link))) return;
+  Tasks.Tasks.insert({ title: msg.getSubject(), notes: `${msg.getFrom()}\n${link}`, due: `${day}T00:00:00.000Z` }, '@default');
 }
 
 // One request per email: one Noul per rule, a priority Score, the deadline parts and phishing signals, all answered in parallel.
@@ -81,7 +99,7 @@ function ask(email) {
     });
     const code = res.getResponseCode();
     if (code === 200) return JSON.parse(res.getContentText()).answers;
-    // Throwing leaves the thread without DONE_LABEL, so the next run retries it.
+    // Throwing stops the run before the cursor passes this thread, so the next run retries it.
     if ((code !== 429 && code !== 529) || attempt >= 3) throw new Error(`TypeSafe ${code}: ${res.getContentText()}`);
     Utilities.sleep(1000 * 2 ** attempt);
   }
