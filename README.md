@@ -4,7 +4,7 @@
 [Jev](https://docs.typesafe.ai) reads every new email and labels, stars, archives it, turns it into a to-do, or flags it as phishing.
 Every morning it sends you a digest, and it reminds you about emails you sent that are still waiting on a reply.
 
-> ~300 lines · one Apps Script file · no server · no OAuth app · 2-minute setup
+> ~300 lines · one Apps Script file · no server · no OAuth app · 5-minute setup, no coding
 
 ## Gmail's filters can't do this
 
@@ -62,17 +62,74 @@ Jev doesn't write text. It returns **probabilities**, and plain code decides wha
 For deadlines, Jev only picks out the parts of the date (*which month? which day? "tomorrow"? "next Monday"?*).
 The calendar math is done in code, counting from when the email was sent. That makes it deterministic and easy to check.
 
-## Setup (2 min)
+## Setup (about 5 minutes, no coding)
 
-1. Get a TypeSafe API key at [typesafe.ai](https://typesafe.ai).
-2. Go to [script.google.com](https://script.google.com) → **New project**, then paste in [`Code.gs`](Code.gs).
-3. **Project Settings** → **Script Properties** → add `TYPESAFE_API_KEY`.
-4. **Services** (the ＋ in the left sidebar) → add **Google Tasks API**.
-5. Edit `RULES` to match your own filters.
-6. Run `run` once and grant the permissions, then check the labels it applied.
-7. Run `install` once. From then on it runs every 10 minutes and sends your digest every morning.
+You need a Google account and a computer with a browser. Everything below is point-and-click.
 
-> **Stuck on "Loading data…"?** Open an incognito window and sign in with only the Google account you want to filter. Apps Script can hang when several accounts are signed in.
+**What gets shared:** the script runs inside your own Google account. For each new email it sends the sender, subject, and the first 2,000 characters of the text to TypeSafe's API to get Jev's answers. Nothing else leaves your account, and nobody else, including the author of this repo, gets access to your mail.
+
+### 1. Get a TypeSafe API key
+
+Sign up at [typesafe.ai](https://typesafe.ai) and create an API key. Copy it somewhere handy, you'll paste it in step 4.
+
+### 2. Create the script
+
+1. Open [script.google.com](https://script.google.com) and sign in with the Gmail account you want to filter.
+2. Click **New project** in the top left.
+3. Click **Untitled project** at the top and rename it to `Jev mail filter`.
+
+### 3. Paste the code
+
+1. Open [`Code.gs` in raw form](https://raw.githubusercontent.com/ziyacivan/jev-mail-filter/main/Code.gs), select all (`Ctrl+A` / `Cmd+A`) and copy it.
+2. Back in the script editor, select all the code that's already there (`function myFunction() {…}`) and delete it.
+3. Paste, then save with `Ctrl+S` / `Cmd+S`.
+
+### 4. Add your API key
+
+1. In the left sidebar, click the gear icon (**Project Settings**).
+2. Scroll to the bottom, then click **Add script property**.
+3. Enter `TYPESAFE_API_KEY` as the **Property** and your key from step 1 as the **Value**.
+4. Click **Save script properties**.
+
+### 5. Turn on Google Tasks
+
+This is what turns deadlines into tasks.
+
+1. In the left sidebar, click **Editor** (the `< >` icon).
+2. Next to **Services**, click the **＋**.
+3. Pick **Google Tasks API** from the list and click **Add**.
+
+### 6. Run it once
+
+1. At the top of the editor there's a dropdown next to **Run** and **Debug**. Choose `run` in it.
+2. Click **Run**.
+3. A window asks for permission. Click **Review permissions** and pick your account.
+4. You'll see *"Google hasn't verified this app"*. That's expected, because the app is your own copy and nobody has submitted it to Google. Click **Advanced**, then **Go to Jev mail filter (unsafe)**.
+5. Click **Allow**.
+6. Wait for **Execution completed** in the log at the bottom, then refresh Gmail. New labels appear under **Jev** in the left sidebar.
+
+### 7. Turn it on for good
+
+Choose `install` in the same dropdown and click **Run**. From now on it checks your mail every 10 minutes and sends you a digest every morning at 8:00. You can close the tab.
+
+### Make it yours (optional)
+
+The first lines of the code hold the settings. `RULES` is your list of filters, one sentence each. Edit, add, or delete rules, then save. Label names can be anything, and `Jev/` just groups them in Gmail's sidebar. See [Tuning](#tuning) for the other settings.
+
+### Troubleshooting
+
+- **Stuck on "Loading data…" or the permission window never opens.** Open a private/incognito window, sign in with *only* the Google account you want to filter, and try again. Apps Script can hang when several accounts are signed in at once.
+- **`Tasks is not defined`.** Step 5 was skipped.
+- **`TypeSafe 401`.** The API key is missing or mistyped. Check step 4, and make sure the property name is exactly `TYPESAFE_API_KEY`.
+- **Nothing happened.** On the first run it only looks at the last 2 days of mail. Check **Executions** (the list icon in the left sidebar) for errors.
+
+### Updating
+
+Copy the new [`Code.gs`](https://raw.githubusercontent.com/ziyacivan/jev-mail-filter/main/Code.gs) over the old one, save, and run `install` again. If you had edited `RULES`, copy those back in.
+
+### Uninstalling
+
+Open your project at [script.google.com](https://script.google.com), click the clock icon (**Triggers**) and delete both triggers, or just delete the whole project. The labels stay in Gmail until you remove them.
 
 ## Tuning
 
